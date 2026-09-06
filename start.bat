@@ -1,34 +1,40 @@
 @echo off
-setlocal
+setlocal EnableDelayedExpansion
 title AI Health Assistant Launcher
+
 echo ========================================================
 echo    Starting AI Health Assistant - Clinical Intelligence
 echo ========================================================
 echo.
 
 :: Detect Python command (python or py launcher)
-set "PY_CMD="
-python --version >nul 2>&1 && set "PY_CMD=python"
-if not defined PY_CMD (
-    py --version >nul 2>&1 && set "PY_CMD=py"
+set PY_CMD=
+python --version >nul 2>&1
+if %errorlevel% equ 0 (
+    set PY_CMD=python
+) else (
+    py --version >nul 2>&1
+    if %errorlevel% equ 0 (
+        set PY_CMD=py
+    )
 )
 
-if not defined PY_CMD (
+if "%PY_CMD%"=="" (
     echo [ERROR] Python is not installed or not in your Windows PATH.
     echo.
     echo Please install Python 3.10+ from: https://www.python.org/downloads/
-    echo **IMPORTANT: Be sure to check the box 'Add Python to PATH' during installation!**
+    echo Make sure to check the box: Add Python to PATH during installation.
     echo.
     pause
     exit /b 1
 )
 
-echo [OK] Python detected!
+echo [OK] Python detected: %PY_CMD%
 echo.
 
 :: Create Virtual Environment if it doesn't exist
-if not exist "venv" (
-    echo [1/3] Creating Python Virtual Environment (venv)...
+if not exist "venv\Scripts\activate.bat" (
+    echo [1/3] Setting up Python Virtual Environment...
     %PY_CMD% -m venv venv
 )
 
@@ -39,7 +45,7 @@ if exist "venv\Scripts\activate.bat" (
 
 :: Install / Update Dependencies
 echo [2/3] Checking and installing dependencies from requirements.txt...
-pip install -r requirements.txt
+pip install -r requirements.txt --quiet
 
 :: Check for .env file
 if not exist ".env" (
