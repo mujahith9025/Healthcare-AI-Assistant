@@ -1,33 +1,45 @@
 @echo off
+setlocal
 title AI Health Assistant Launcher
 echo ========================================================
-echo    Starting AI Health Assistant & Clinical Intelligence
+echo    Starting AI Health Assistant - Clinical Intelligence
 echo ========================================================
 echo.
 
-:: Check if Python is installed
-python --version >nul 2>&1
-if %errorlevel% neq 0 (
-    echo [ERROR] Python is not installed or not in your PATH.
-    echo Please download and install Python from https://www.python.org/downloads/
-    echo (Make sure to check 'Add Python to PATH' during installation!)
+:: Detect Python command (python or py launcher)
+set "PY_CMD="
+python --version >nul 2>&1 && set "PY_CMD=python"
+if not defined PY_CMD (
+    py --version >nul 2>&1 && set "PY_CMD=py"
+)
+
+if not defined PY_CMD (
+    echo [ERROR] Python is not installed or not in your Windows PATH.
+    echo.
+    echo Please install Python 3.10+ from: https://www.python.org/downloads/
+    echo **IMPORTANT: Be sure to check the box 'Add Python to PATH' during installation!**
     echo.
     pause
-    exit /b
+    exit /b 1
 )
+
+echo [OK] Python detected!
+echo.
 
 :: Create Virtual Environment if it doesn't exist
 if not exist "venv" (
     echo [1/3] Creating Python Virtual Environment (venv)...
-    python -m venv venv
+    %PY_CMD% -m venv venv
 )
 
 :: Activate Virtual Environment
-call venv\Scripts\activate
+if exist "venv\Scripts\activate.bat" (
+    call venv\Scripts\activate.bat
+)
 
 :: Install / Update Dependencies
 echo [2/3] Checking and installing dependencies from requirements.txt...
-pip install -r requirements.txt --quiet
+pip install -r requirements.txt
 
 :: Check for .env file
 if not exist ".env" (
@@ -46,7 +58,7 @@ echo   Press CTRL+C in this window to stop the application.
 echo ========================================================
 echo.
 
-:: Open browser automatically after 2 seconds
+:: Open browser automatically
 start "" http://127.0.0.1:5000
 
 :: Run the Flask App
