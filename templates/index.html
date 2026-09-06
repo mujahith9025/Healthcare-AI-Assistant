@@ -1,0 +1,1664 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#0284c7">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <title>AI Healthcare Information Assistant</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=3.0">
+    <!-- Client-side PDF Generation Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+</head>
+<body>
+    <!-- First-Time Interactive Medical Disclaimer Modal -->
+    <div class="modal-overlay" id="disclaimer-modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+        <div class="modal-card">
+            <div class="modal-badge">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                    <line x1="12" y1="8" x2="12" y2="12"/>
+                    <line x1="12" y1="16" x2="12.01" y2="16"/>
+                </svg>
+            </div>
+            <h2 id="modal-title">Important Health & Safety Disclaimer</h2>
+            <p class="modal-lead">Please review and acknowledge these clinical safety principles before using the assistant:</p>
+            
+            <ul class="modal-rules">
+                <li>
+                    <strong>Educational Only:</strong> This AI provides general health information and is NOT a substitute for professional medical advice, diagnosis, or treatment.
+                </li>
+                <li>
+                    <strong>No Prescriptions:</strong> This assistant never prescribes medications or modifies pharmaceutical dosages.
+                </li>
+                <li>
+                    <strong>Emergency Situations:</strong> If you or someone around you experiences acute chest pain, shortness of breath, severe bleeding, or trauma, contact local emergency services (911 / 112 / 999) immediately.
+                </li>
+                <li>
+                    <strong>Doctor Consultation:</strong> Always consult a qualified physician for personal health symptoms and clinical decisions.
+                </li>
+            </ul>
+
+            <div class="modal-ack">
+                <label class="checkbox-container">
+                    <input type="checkbox" id="ack-checkbox" onchange="toggleAckButton()">
+                    <span class="custom-check"></span>
+                    <span class="ack-text">I understand this is an educational tool only and agree not to use it for medical emergencies.</span>
+                </label>
+            </div>
+
+            <button type="button" id="modal-agree-btn" class="modal-btn" disabled onclick="acceptDisclaimer()">
+                I Understand & Proceed
+            </button>
+        </div>
+    </div>
+
+    <!-- ======================================================================= -->
+    <!-- UNIFIED HEALTH HUB 1: Symptom & Triage Hub (Body Map + 5-Step Triage)      -->
+    <!-- ======================================================================= -->
+    <div class="modal-overlay hidden" id="symptom-triage-hub-modal" role="dialog" aria-modal="true" aria-labelledby="st-hub-title">
+        <div class="modal-card hub-modal-card symptom-triage-card">
+            <!-- Hub Header -->
+            <div class="hub-modal-header">
+                <div class="hub-header-left">
+                    <div class="hub-icon-badge bodymap-icon-bg" aria-hidden="true">🩺</div>
+                    <div>
+                        <h2 id="st-hub-title" class="hub-title">Symptom & Triage Hub</h2>
+                        <span class="hub-subtitle">Interactive 2D anatomical locator & step-by-step guided clinical triage</span>
+                    </div>
+                </div>
+                <button type="button" class="hub-close-btn" onclick="closeSymptomTriageHub()" aria-label="Close symptom hub">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"/>
+                        <line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                </button>
+            </div>
+
+            <!-- Hub Top Navigation Tabs -->
+            <div class="hub-nav-tabs" role="tablist" aria-label="Symptom & Triage Tools">
+                <button type="button" class="hub-nav-pill active" id="st-tab-bodymap" onclick="switchSymptomTriageTab('bodymap')">
+                    🧍 2D Visual Body Map
+                </button>
+                <button type="button" class="hub-nav-pill" id="st-tab-triage" onclick="switchSymptomTriageTab('triage')">
+                    🩺 5-Step Guided Clinical Triage
+                </button>
+            </div>
+
+            <!-- Hub Body -->
+            <div class="hub-modal-body">
+                <!-- VIEW 1: 2D Visual Body Map (Symptom Locator) -->
+                <div class="hub-view-pane active" id="st-view-bodymap">
+                    <div class="bodymap-layout">
+                        <!-- Left: 2D Anatomical Map Canvas -->
+                        <div class="bodymap-canvas-panel">
+                            <!-- Front / Back Switcher -->
+                            <div class="bodymap-view-switch" role="tablist" aria-label="Body view switcher">
+                                <button type="button" id="bodymap-front-btn" class="bodymap-switch-pill active" onclick="toggleBodyView('front')">
+                                    Front View
+                                </button>
+                                <button type="button" id="bodymap-back-btn" class="bodymap-switch-pill" onclick="toggleBodyView('back')">
+                                    Back View
+                                </button>
+                            </div>
+
+                            <!-- Interactive Anatomical Silhouette -->
+                            <div class="bodymap-figure-wrap">
+                                <svg class="bodymap-svg" id="bodymap-svg" viewBox="0 0 260 480" xmlns="http://www.w3.org/2000/svg">
+                                    <!-- Background Body Silhouette Shadow -->
+                                    <path class="body-silhouette-bg" d="M130,22 C116,22 105,33 105,48 C105,60 113,70 123,73 L121,85 C98,88 83,99 76,118 L55,185 C51,198 56,210 68,214 C78,217 89,211 92,201 L103,158 L104,228 C104,250 109,268 115,282 L106,370 L102,442 C101,452 109,460 119,460 C128,460 135,453 136,444 L142,355 L148,444 C149,453 156,460 165,460 C175,460 183,452 182,442 L178,370 L169,282 C175,268 180,250 180,228 L181,158 L192,201 C195,211 206,217 216,214 C228,210 233,198 229,185 L208,118 C201,99 186,88 163,85 L161,73 C171,70 179,60 179,48 C179,33 168,22 154,22 Z" />
+
+                                    <!-- Interactive Zones: FRONT VIEW -->
+                                    <g id="zones-front">
+                                        <!-- Head & Brain -->
+                                        <g class="body-zone" id="zone-head" onclick="selectBodyRegion('head')">
+                                            <ellipse cx="130" cy="48" rx="23" ry="26" class="zone-shape"/>
+                                            <circle cx="130" cy="42" r="5" class="zone-pin"/>
+                                            <circle cx="130" cy="42" r="10" class="zone-pulse"/>
+                                            <text x="130" y="46" class="zone-label">Head</text>
+                                        </g>
+
+                                        <!-- Throat & Neck -->
+                                        <g class="body-zone" id="zone-throat" onclick="selectBodyRegion('throat')">
+                                            <rect x="117" y="74" width="26" height="15" rx="5" class="zone-shape"/>
+                                            <circle cx="130" cy="81" r="4" class="zone-pin"/>
+                                            <circle cx="130" cy="81" r="8" class="zone-pulse"/>
+                                            <text x="130" y="84" class="zone-label">Throat</text>
+                                        </g>
+
+                                        <!-- Chest & Respiratory/Heart -->
+                                        <g class="body-zone" id="zone-chest" onclick="selectBodyRegion('chest')">
+                                            <path d="M104,95 C113,92 147,92 156,95 C164,103 167,135 158,150 C146,155 114,155 102,150 C93,135 96,103 104,95 Z" class="zone-shape"/>
+                                            <circle cx="130" cy="122" r="5" class="zone-pin"/>
+                                            <circle cx="130" cy="122" r="11" class="zone-pulse"/>
+                                            <text x="130" y="126" class="zone-label">Chest & Lungs</text>
+                                        </g>
+
+                                        <!-- Abdomen & Stomach -->
+                                        <g class="body-zone" id="zone-abdomen" onclick="selectBodyRegion('abdomen')">
+                                            <path d="M104,154 C115,152 145,152 156,154 C162,168 162,198 156,212 C145,215 115,215 104,212 C98,198 98,168 104,154 Z" class="zone-shape"/>
+                                            <circle cx="130" cy="183" r="5" class="zone-pin"/>
+                                            <circle cx="130" cy="183" r="11" class="zone-pulse"/>
+                                            <text x="130" y="187" class="zone-label">Abdomen</text>
+                                        </g>
+
+                                        <!-- Pelvic & Urinary -->
+                                        <g class="body-zone" id="zone-pelvis" onclick="selectBodyRegion('pelvis')">
+                                            <path d="M106,216 C116,215 144,215 154,216 C162,230 162,254 150,268 C140,270 120,270 110,268 C98,254 98,230 106,216 Z" class="zone-shape"/>
+                                            <circle cx="130" cy="242" r="4.5" class="zone-pin"/>
+                                            <circle cx="130" cy="242" r="9" class="zone-pulse"/>
+                                            <text x="130" y="246" class="zone-label">Pelvic</text>
+                                        </g>
+
+                                        <!-- Arms & Wrists (Left & Right) -->
+                                        <g class="body-zone" id="zone-arms" onclick="selectBodyRegion('arms')">
+                                            <path d="M84,105 L60,185 C57,196 68,206 77,198 L98,138 Z" class="zone-shape"/>
+                                            <path d="M176,105 L200,185 C203,196 192,206 183,198 L162,138 Z" class="zone-shape"/>
+                                            <circle cx="68" cy="155" r="4" class="zone-pin"/>
+                                            <circle cx="192" cy="155" r="4" class="zone-pin"/>
+                                            <text x="194" y="172" class="zone-label">Arms</text>
+                                        </g>
+
+                                        <!-- Knees & Thighs -->
+                                        <g class="body-zone" id="zone-knees" onclick="selectBodyRegion('knees')">
+                                            <rect x="105" y="278" width="22" height="88" rx="8" class="zone-shape"/>
+                                            <rect x="133" y="278" width="22" height="88" rx="8" class="zone-shape"/>
+                                            <circle cx="116" cy="336" r="4" class="zone-pin"/>
+                                            <circle cx="144" cy="336" r="4" class="zone-pin"/>
+                                            <text x="130" y="340" class="zone-label">Knees & Joints</text>
+                                        </g>
+
+                                        <!-- Feet & Ankles -->
+                                        <g class="body-zone" id="zone-feet" onclick="selectBodyRegion('feet')">
+                                            <rect x="102" y="375" width="22" height="78" rx="7" class="zone-shape"/>
+                                            <rect x="136" y="375" width="22" height="78" rx="7" class="zone-shape"/>
+                                            <circle cx="113" cy="430" r="4" class="zone-pin"/>
+                                            <circle cx="147" cy="430" r="4" class="zone-pin"/>
+                                            <text x="130" y="420" class="zone-label">Feet & Ankles</text>
+                                        </g>
+                                    </g>
+
+                                    <!-- Interactive Zones: BACK VIEW (Hidden by default) -->
+                                    <g id="zones-back" style="display: none;">
+                                        <!-- Back of Head & Neck -->
+                                        <g class="body-zone" id="zone-back-head" onclick="selectBodyRegion('head')">
+                                            <ellipse cx="130" cy="48" rx="23" ry="26" class="zone-shape"/>
+                                            <circle cx="130" cy="52" r="5" class="zone-pin"/>
+                                            <circle cx="130" cy="52" r="10" class="zone-pulse"/>
+                                            <text x="130" y="56" class="zone-label">Cervical Spine</text>
+                                        </g>
+
+                                        <!-- Shoulders & Upper Back -->
+                                        <g class="body-zone" id="zone-shoulders" onclick="selectBodyRegion('shoulders')">
+                                            <path d="M96,92 C114,88 146,88 164,92 C172,106 172,130 160,140 C144,142 116,142 100,140 C88,130 88,106 96,92 Z" class="zone-shape"/>
+                                            <circle cx="130" cy="115" r="5" class="zone-pin"/>
+                                            <circle cx="130" cy="115" r="11" class="zone-pulse"/>
+                                            <text x="130" y="119" class="zone-label">Upper Back & Shoulders</text>
+                                        </g>
+
+                                        <!-- Lower Back / Lumbar Spine -->
+                                        <g class="body-zone" id="zone-spine" onclick="selectBodyRegion('spine')">
+                                            <path d="M104,145 C115,142 145,142 156,145 C162,165 162,205 156,220 C145,223 115,223 104,220 C98,205 98,165 104,145 Z" class="zone-shape"/>
+                                            <circle cx="130" cy="182" r="5.5" class="zone-pin"/>
+                                            <circle cx="130" cy="182" r="12" class="zone-pulse"/>
+                                            <text x="130" y="186" class="zone-label">Lower Back (Lumbar)</text>
+                                        </g>
+
+                                        <!-- Hips & Sciatica / Glutes -->
+                                        <g class="body-zone" id="zone-hips" onclick="selectBodyRegion('hips')">
+                                            <path d="M104,224 C116,222 144,222 156,224 C164,242 164,268 152,280 C140,282 120,282 108,280 C96,268 96,242 104,224 Z" class="zone-shape"/>
+                                            <circle cx="130" cy="252" r="4.5" class="zone-pin"/>
+                                            <circle cx="130" cy="252" r="9" class="zone-pulse"/>
+                                            <text x="130" y="256" class="zone-label">Hips & Sciatica</text>
+                                        </g>
+
+                                        <!-- Calves & Achilles Heel -->
+                                        <g class="body-zone" id="zone-back-legs" onclick="selectBodyRegion('feet')">
+                                            <rect x="102" y="375" width="22" height="78" rx="7" class="zone-shape"/>
+                                            <rect x="136" y="375" width="22" height="78" rx="7" class="zone-shape"/>
+                                            <circle cx="113" cy="430" r="4" class="zone-pin"/>
+                                            <circle cx="147" cy="430" r="4" class="zone-pin"/>
+                                            <text x="130" y="420" class="zone-label">Calves & Heels</text>
+                                        </g>
+                                    </g>
+                                </svg>
+                            </div>
+
+                            <!-- Whole-Body Quick Filters -->
+                            <div class="bodymap-global-row">
+                                <button type="button" class="bodymap-global-chip" onclick="selectBodyRegion('skin')">
+                                    🧴 Skin & Rash
+                                </button>
+                                <button type="button" class="bodymap-global-chip" onclick="selectBodyRegion('general')">
+                                    🌡️ Fever / Fatigue
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Right: Interactive Symptom Details Drawer -->
+                        <div class="bodymap-details-panel" id="bodymap-details-panel">
+                            <div class="bodymap-drawer-header">
+                                <div class="bodymap-drawer-icon" id="drawer-region-icon">🧠</div>
+                                <div>
+                                    <h3 class="bodymap-drawer-title" id="drawer-region-title">Head & Neurological</h3>
+                                    <span class="bodymap-drawer-badge" id="drawer-region-badge">Select symptoms below</span>
+                                </div>
+                            </div>
+
+                            <p class="bodymap-drawer-desc" id="drawer-region-desc">
+                                Common issues affecting the head, forehead, sinuses, and neurological pathways:
+                            </p>
+
+                            <div class="bodymap-symptoms-grid" id="drawer-symptoms-container">
+                                <!-- Populated dynamically via script.js -->
+                            </div>
+
+                            <!-- Action Footer inside Drawer -->
+                            <div class="bodymap-drawer-actions">
+                                <button type="button" id="bodymap-triage-btn" class="bodymap-action-primary" onclick="launchTriageFromSelectedRegion()">
+                                    🩺 Start Guided Triage for this Area
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- VIEW 2: 5-Step Guided Symptom Triage Wizard -->
+                <div class="hub-view-pane" id="st-view-triage" style="display: none;">
+                    <div class="triage-wizard-container">
+                        <!-- Stepper Progress Bar -->
+                        <div class="triage-progress-header">
+                            <span class="triage-step-badge" id="triage-step-indicator">Step 1 of 5</span>
+                            <div class="triage-progress-track">
+                                <div class="triage-progress-fill" id="triage-progress-fill" style="width: 20%;"></div>
+                            </div>
+                        </div>
+
+                        <!-- Dynamic Step Body -->
+                        <div class="triage-body" id="triage-body">
+                            <!-- Injected dynamically via script.js -->
+                        </div>
+
+                        <!-- Triage Actions Footer -->
+                        <div class="triage-footer">
+                            <button type="button" id="triage-prev-btn" class="triage-btn-secondary" onclick="prevTriageStep()" style="display: none;">
+                                ← Back
+                            </button>
+                            <button type="button" id="triage-next-btn" class="triage-btn-primary" onclick="nextTriageStep()">
+                                Continue →
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ======================================================================= -->
+    <!-- UNIFIED HEALTH HUB 2: Medications, Labs & Diet Hub                      -->
+    <!-- ======================================================================= -->
+    <div class="modal-overlay hidden" id="meds-labs-diet-hub-modal" role="dialog" aria-modal="true" aria-labelledby="mld-hub-title">
+        <div class="modal-card hub-modal-card meds-labs-diet-card">
+            <!-- Hub Header -->
+            <div class="hub-modal-header">
+                <div class="hub-header-left">
+                    <div class="hub-icon-badge poly-icon-bg" aria-hidden="true">💊</div>
+                    <div>
+                        <h2 id="mld-hub-title" class="hub-title">Medications, Labs & Diet Hub</h2>
+                        <span class="hub-subtitle">Drug safety matrix, 25+ biomarker interpreter & therapeutic diet prescriptor</span>
+                    </div>
+                </div>
+                <button type="button" class="hub-close-btn" onclick="closeMedsLabsDietHub()" aria-label="Close medications and diet hub">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"/>
+                        <line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                </button>
+            </div>
+
+            <!-- Hub Top Navigation Tabs -->
+            <div class="hub-nav-tabs" role="tablist" aria-label="Medications, Labs & Diet Tools">
+                <button type="button" class="hub-nav-pill active" id="mld-tab-poly" onclick="switchMedsLabsDietTab('polypharmacy')">
+                    💊 Multi-Drug Safety Matrix
+                </button>
+                <button type="button" class="hub-nav-pill" id="mld-tab-labs" onclick="switchMedsLabsDietTab('labs')">
+                    🔬 Lab Test & Biomarkers
+                </button>
+                <button type="button" class="hub-nav-pill" id="mld-tab-nutrition" onclick="switchMedsLabsDietTab('nutrition')">
+                    🥗 Medical Nutrition Therapy
+                </button>
+            </div>
+
+            <!-- Hub Body -->
+            <div class="hub-modal-body">
+                <!-- VIEW 1: Multi-Drug Polypharmacy Safety Matrix -->
+                <div class="hub-view-pane active" id="mld-view-poly">
+                    <div class="poly-modal-body">
+                        <!-- Drug Tag Selector & Input Bar -->
+                        <div class="poly-input-section">
+                            <label for="poly-drug-input" class="poly-input-label">Select or type medications, supplements, or underlying conditions:</label>
+                            <div class="poly-input-row">
+                                <input type="text" id="poly-drug-input" class="poly-input" placeholder="e.g. Warfarin, Ibuprofen, Lisinopril, Asthma..." autocomplete="off" onkeydown="handlePolyInputKeydown(event)">
+                                <button type="button" class="poly-add-btn" onclick="addDrugFromInput()">
+                                    <span>+ Add</span>
+                                </button>
+                                <button type="button" class="poly-scan-trigger-btn" onclick="openVisionModal('prescription')" title="Scan Prescription or Medication Box (OCR)">
+                                    <span>📸 Scan Rx</span>
+                                </button>
+                            </div>
+
+                            <!-- Quick Click Suggestion Pills -->
+                            <div class="poly-quick-chips">
+                                <span class="poly-quick-label">Quick Add:</span>
+                                <button type="button" class="poly-chip" onclick="addDrugTag('Warfarin')">Warfarin</button>
+                                <button type="button" class="poly-chip" onclick="addDrugTag('Ibuprofen')">Ibuprofen</button>
+                                <button type="button" class="poly-chip" onclick="addDrugTag('Aspirin')">Aspirin</button>
+                                <button type="button" class="poly-chip" onclick="addDrugTag('Lisinopril')">Lisinopril</button>
+                                <button type="button" class="poly-chip" onclick="addDrugTag('Potassium')">Potassium</button>
+                                <button type="button" class="poly-chip" onclick="addDrugTag('Sertraline')">Sertraline</button>
+                                <button type="button" class="poly-chip" onclick="addDrugTag('Tramadol')">Tramadol</button>
+                                <button type="button" class="poly-chip" onclick="addDrugTag('Atorvastatin')">Atorvastatin</button>
+                                <button type="button" class="poly-chip" onclick="addDrugTag('Metformin')">Metformin</button>
+                                <button type="button" class="poly-chip" onclick="addDrugTag('Alcohol')">Alcohol</button>
+                                <button type="button" class="poly-chip" onclick="addDrugTag('Asthma')">Asthma</button>
+                                <button type="button" class="poly-chip" onclick="addDrugTag('CKD (Kidney)')">CKD (Kidney)</button>
+                            </div>
+
+                            <!-- Selected Entities Basket -->
+                            <div class="poly-selected-basket">
+                                <span class="basket-label">Selected Items to Check (<span id="poly-count">0</span>):</span>
+                                <div class="poly-tags-container" id="poly-tags-container">
+                                    <span class="poly-empty-hint">No items selected yet. Click quick tags above or type a medication name.</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Live Interaction Matrix Results -->
+                        <div class="poly-results-section" id="poly-results-section">
+                            <div class="poly-placeholder-state">
+                                <div class="poly-ph-icon">🛡️</div>
+                                <h4>Add at least 2 medications or conditions to evaluate interactions</h4>
+                                <p>Our clinical safety matrix checks over 50 major drug-drug, drug-condition, and drug-food contraindications.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Footer Actions -->
+                    <div class="poly-modal-footer">
+                        <button type="button" class="poly-btn-secondary" onclick="clearPolypharmacyBasket()">
+                            Clear All
+                        </button>
+                        <button type="button" class="poly-btn-secondary" id="poly-attach-btn" onclick="attachPolypharmacyToDoctorSummary()" style="display: none;">
+                            📄 Attach to Doctor PDF
+                        </button>
+                        <button type="button" class="poly-btn-primary" onclick="discussPolypharmacyInChat()">
+                            💬 Discuss with Assistant
+                        </button>
+                    </div>
+                </div>
+
+                <!-- VIEW 2: Medical Lab Test & Biomarker Range Interpreter -->
+                <div class="hub-view-pane" id="mld-view-labs" style="display: none;">
+                    <div class="lab-modal-body">
+                        <!-- Panel Category Switcher -->
+                        <div class="lab-panel-header-row">
+                            <div class="lab-panel-tabs" role="tablist" aria-label="Lab test panel categories">
+                                <button type="button" class="lab-tab-pill active" onclick="switchLabPanel('metabolic', this)">🩸 Metabolic</button>
+                                <button type="button" class="lab-tab-pill" onclick="switchLabPanel('lipids', this)">❤️ Lipids</button>
+                                <button type="button" class="lab-tab-pill" onclick="switchLabPanel('vitals', this)">💓 Vitals</button>
+                                <button type="button" class="lab-tab-pill" onclick="switchLabPanel('cbc', this)">🔬 CBC Blood</button>
+                                <button type="button" class="lab-tab-pill" onclick="switchLabPanel('renal', this)">🫘 Kidney</button>
+                                <button type="button" class="lab-tab-pill" onclick="switchLabPanel('hepatic', this)">🧪 Liver</button>
+                                <button type="button" class="lab-tab-pill" onclick="switchLabPanel('thyroid_vitamins', this)">🦋 Thyroid & Vitamins</button>
+                            </div>
+                            <button type="button" class="lab-scan-trigger-btn" onclick="openVisionModal('lab_report')" title="Scan Physical Lab Slip or Bloodwork (OCR)">
+                                <span>📸 Scan Lab Slip</span>
+                            </button>
+                        </div>
+
+                        <!-- Test Selection & Value Input Bar -->
+                        <div class="lab-input-card">
+                            <div class="lab-input-grid">
+                                <div class="lab-field-group">
+                                    <label for="lab-test-select" class="lab-label">Select Biomarker / Test:</label>
+                                    <select id="lab-test-select" class="lab-select" onchange="onLabTestSelected(this.value)">
+                                        <!-- Populated dynamically via script.js -->
+                                    </select>
+                                </div>
+                                <div class="lab-field-group" id="lab-val1-group">
+                                    <label for="lab-val-input" class="lab-label" id="lab-val-label">Your Lab Value:</label>
+                                    <div class="lab-input-unit-wrap">
+                                        <input type="number" id="lab-val-input" class="lab-number-input" step="any" oninput="onLabValueChange()">
+                                        <span class="lab-unit-tag" id="lab-unit-tag">mg/dL</span>
+                                    </div>
+                                </div>
+                                <div class="lab-field-group" id="lab-val2-group" style="display: none;">
+                                    <label for="lab-val2-input" class="lab-label">Diastolic (mmHg):</label>
+                                    <div class="lab-input-unit-wrap">
+                                        <input type="number" id="lab-val2-input" class="lab-number-input" step="any" oninput="onLabValueChange()">
+                                        <span class="lab-unit-tag">mmHg</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Range Visual Gauge Slider Bar -->
+                            <div class="lab-gauge-wrap" id="lab-gauge-wrap">
+                                <div class="lab-gauge-labels">
+                                    <span id="gauge-min-label">Low</span>
+                                    <span class="gauge-target-pill" id="gauge-target-label">Optimal Target</span>
+                                    <span id="gauge-max-label">High</span>
+                                </div>
+                                <div class="lab-gauge-track">
+                                    <div class="gauge-zone zone-low"></div>
+                                    <div class="gauge-zone zone-optimal"></div>
+                                    <div class="gauge-zone zone-borderline"></div>
+                                    <div class="gauge-zone zone-high"></div>
+                                    <div class="gauge-pin" id="gauge-pin" style="left: 45%;">
+                                        <div class="gauge-pin-thumb"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Dynamic Interpretation Report Card -->
+                        <div class="lab-report-card" id="lab-report-card">
+                            <!-- Populated dynamically via script.js -->
+                        </div>
+                    </div>
+
+                    <!-- Footer Actions -->
+                    <div class="lab-modal-footer">
+                        <button type="button" class="lab-btn-secondary" onclick="resetLabInputs()">
+                            Reset Default
+                        </button>
+                        <button type="button" class="lab-btn-secondary" id="lab-attach-btn" onclick="attachLabToDoctorSummary()">
+                            📄 Attach to Doctor PDF
+                        </button>
+                        <button type="button" class="lab-btn-primary" onclick="discussLabInChat()">
+                            💬 Discuss with Assistant
+                        </button>
+                    </div>
+                </div>
+
+                <!-- VIEW 3: Medical Nutrition Therapy Prescriptor -->
+                <div class="hub-view-pane" id="mld-view-nutrition" style="display: none;">
+                    <div class="nutrition-modal-body">
+                        <!-- Condition Selection Grid -->
+                        <div class="nutrition-section-card">
+                            <div class="nutrition-section-header">
+                                <span class="nutrition-step-badge">1</span>
+                                <div>
+                                    <h3 class="nutrition-step-title">Select Diagnosed Conditions & Health Goals</h3>
+                                    <p class="nutrition-step-desc">Choose one or more conditions to generate a personalized combined therapeutic diet.</p>
+                                </div>
+                            </div>
+                            <div class="nutrition-conditions-grid" id="nutrition-conditions-grid">
+                                <button type="button" class="nutrition-condition-chip" data-id="hypertension" onclick="toggleNutritionCondition('hypertension')">
+                                    <span class="cond-icon">❤️</span>
+                                    <span class="cond-name">Hypertension (DASH)</span>
+                                </button>
+                                <button type="button" class="nutrition-condition-chip" data-id="diabetes" onclick="toggleNutritionCondition('diabetes')">
+                                    <span class="cond-icon">🩸</span>
+                                    <span class="cond-name">Type 2 Diabetes (Low-GI)</span>
+                                </button>
+                                <button type="button" class="nutrition-condition-chip" data-id="ckd" onclick="toggleNutritionCondition('ckd')">
+                                    <span class="cond-icon">🫘</span>
+                                    <span class="cond-name">CKD (Renal Protective)</span>
+                                </button>
+                                <button type="button" class="nutrition-condition-chip" data-id="gout" onclick="toggleNutritionCondition('gout')">
+                                    <span class="cond-icon">🥩</span>
+                                    <span class="cond-name">Gout (Low-Purine)</span>
+                                </button>
+                                <button type="button" class="nutrition-condition-chip" data-id="gerd" onclick="toggleNutritionCondition('gerd')">
+                                    <span class="cond-icon">🥣</span>
+                                    <span class="cond-name">GERD (Anti-Reflux)</span>
+                                </button>
+                                <button type="button" class="nutrition-condition-chip" data-id="ibs" onclick="toggleNutritionCondition('ibs')">
+                                    <span class="cond-icon">🌾</span>
+                                    <span class="cond-name">IBS (Low-FODMAP)</span>
+                                </button>
+                                <button type="button" class="nutrition-condition-chip" data-id="nafld" onclick="toggleNutritionCondition('nafld')">
+                                    <span class="cond-icon">🧪</span>
+                                    <span class="cond-name">NAFLD (Fatty Liver)</span>
+                                </button>
+                                <button type="button" class="nutrition-condition-chip" data-id="hyperlipidemia" onclick="toggleNutritionCondition('hyperlipidemia')">
+                                    <span class="cond-icon">🫀</span>
+                                    <span class="cond-name">Hyperlipidemia (TLC)</span>
+                                </button>
+                                <button type="button" class="nutrition-condition-chip" data-id="celiac" onclick="toggleNutritionCondition('celiac')">
+                                    <span class="cond-icon">🍞</span>
+                                    <span class="cond-name">Celiac (Strict Gluten-Free)</span>
+                                </button>
+                                <button type="button" class="nutrition-condition-chip" data-id="anemia" onclick="toggleNutritionCondition('anemia')">
+                                    <span class="cond-icon">🩸</span>
+                                    <span class="cond-name">Iron Deficiency Anemia</span>
+                                </button>
+                                <button type="button" class="nutrition-condition-chip" data-id="osteoporosis" onclick="toggleNutritionCondition('osteoporosis')">
+                                    <span class="cond-icon">🦴</span>
+                                    <span class="cond-name">Osteoporosis (Bone Density)</span>
+                                </button>
+                                <button type="button" class="nutrition-condition-chip" data-id="migraine" onclick="toggleNutritionCondition('migraine')">
+                                    <span class="cond-icon">🧠</span>
+                                    <span class="cond-name">Migraine (Trigger-Free)</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Dietary Preferences & Food-Drug Cross Check Section -->
+                        <div class="nutrition-custom-row">
+                            <!-- Dietary Preferences -->
+                            <div class="nutrition-subcard">
+                                <div class="nutrition-section-header">
+                                    <span class="nutrition-step-badge">2</span>
+                                    <div>
+                                        <h4 class="nutrition-step-title">Dietary Patterns & Restrictions</h4>
+                                        <p class="nutrition-step-desc">Filter recipes and food substitutions</p>
+                                    </div>
+                                </div>
+                                <div class="nutrition-pref-pills" id="nutrition-pref-pills">
+                                    <button type="button" class="nutrition-pref-pill" data-pref="vegetarian" onclick="toggleDietaryPref('vegetarian')">🥬 Vegetarian</button>
+                                    <button type="button" class="nutrition-pref-pill" data-pref="vegan" onclick="toggleDietaryPref('vegan')">🌱 Vegan</button>
+                                    <button type="button" class="nutrition-pref-pill" data-pref="gluten_free" onclick="toggleDietaryPref('gluten_free')">🌾 Gluten-Free</button>
+                                    <button type="button" class="nutrition-pref-pill" data-pref="dairy_free" onclick="toggleDietaryPref('dairy_free')">🥛 Dairy-Free</button>
+                                    <button type="button" class="nutrition-pref-pill" data-pref="low_sodium" onclick="toggleDietaryPref('low_sodium')">🧂 Low Sodium (&lt;1.5g)</button>
+                                    <button type="button" class="nutrition-pref-pill" data-pref="low_carb" onclick="toggleDietaryPref('low_carb')">🥑 Low Carb</button>
+                                    <button type="button" class="nutrition-pref-pill" data-pref="nut_free" onclick="toggleDietaryPref('nut_free')">🥜 Nut-Free</button>
+                                </div>
+                            </div>
+
+                            <!-- Medication Cross-Check -->
+                            <div class="nutrition-subcard">
+                                <div class="nutrition-section-header">
+                                    <span class="nutrition-step-badge">3</span>
+                                    <div>
+                                        <h4 class="nutrition-step-title">Active Prescriptions (Food-Drug Check)</h4>
+                                        <p class="nutrition-step-desc">Screens for nutrient-medication interactions</p>
+                                    </div>
+                                </div>
+                                <div class="nutrition-meds-input-wrap">
+                                    <input type="text" id="nutrition-med-input" class="nutrition-med-input" placeholder="Type drug name (e.g. Warfarin, Atorvastatin, Lisinopril)..." onkeydown="if(event.key==='Enter'){event.preventDefault();addNutritionMed();}">
+                                    <button type="button" class="nutrition-add-med-btn" onclick="addNutritionMed()">+ Add</button>
+                                </div>
+                                <div class="nutrition-quick-meds">
+                                    <span class="quick-label">Quick:</span>
+                                    <button type="button" class="nutrition-quick-med" onclick="quickAddNutritionMed('Warfarin')">Warfarin</button>
+                                    <button type="button" class="nutrition-quick-med" onclick="quickAddNutritionMed('Atorvastatin')">Atorvastatin</button>
+                                    <button type="button" class="nutrition-quick-med" onclick="quickAddNutritionMed('Lisinopril')">Lisinopril</button>
+                                    <button type="button" class="nutrition-quick-med" onclick="quickAddNutritionMed('Levothyroxine')">Levothyroxine</button>
+                                    <button type="button" class="nutrition-quick-med" onclick="quickAddNutritionMed('Metformin')">Metformin</button>
+                                    <button type="button" class="nutrition-quick-med" onclick="quickAddNutritionMed('Ciprofloxacin')">Ciprofloxacin</button>
+                                </div>
+                                <div class="nutrition-meds-basket" id="nutrition-meds-basket">
+                                    <span class="empty-meds-text">No medications added</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Dynamic Live Nutrition Therapy Results Section -->
+                        <div class="nutrition-results-container" id="nutrition-results-container">
+                            <div class="nutrition-placeholder-state">
+                                <div class="nutrition-ph-icon">🥗</div>
+                                <h4>Select at least one condition above to generate your clinical nutrition plan</h4>
+                                <p>Our Medical Nutrition Therapy prescriptor balances multi-disease conflicts, calculates daily macro/micronutrient goals, and curates customized food lists.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Footer Actions -->
+                    <div class="nutrition-modal-footer">
+                        <button type="button" class="nutrition-btn-secondary" onclick="resetNutritionForm()">
+                            Reset Selections
+                        </button>
+                        <button type="button" class="nutrition-btn-secondary" id="nutrition-attach-btn" onclick="attachNutritionToDoctorSummary()" style="display: none;">
+                            📄 Attach to Doctor PDF
+                        </button>
+                        <button type="button" class="nutrition-btn-primary" onclick="discussNutritionInChat()">
+                            💬 Discuss with Assistant
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ======================================================================= -->
+    <!-- PRE-CONSULTATION INTAKE PDF SUMMARY MODAL (Export for Doctor)            -->
+    <!-- ======================================================================= -->
+    <div class="modal-overlay hidden" id="export-modal" role="dialog" aria-modal="true" aria-labelledby="export-modal-title">
+        <div class="modal-card export-modal-card">
+            <!-- Modal Header -->
+            <div class="export-modal-header">
+                <div class="export-header-info">
+                    <div class="export-icon-badge" aria-hidden="true">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                            <polyline points="14 2 14 8 20 8"/>
+                            <line x1="16" y1="13" x2="8" y2="13"/>
+                            <line x1="16" y1="17" x2="8" y2="17"/>
+                            <polyline points="10 9 9 9 8 9"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h2 id="export-modal-title" class="export-title">Clinical Intake Summary (PDF)</h2>
+                        <span class="export-subtitle">Structured pre-consultation report for your doctor or healthcare provider</span>
+                    </div>
+                </div>
+                <button type="button" class="export-close-btn" onclick="closeExportModal()" aria-label="Close export preview">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"/>
+                        <line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                </button>
+            </div>
+
+            <!-- Scrollable Report Container -->
+            <div class="export-preview-container">
+                <!-- Printable / Downloadable Document Root -->
+                <div class="intake-document" id="intake-document">
+                    <!-- Document Letterhead -->
+                    <div class="intake-letterhead">
+                        <div class="intake-brand">
+                            <div class="intake-brand-logo">🩺</div>
+                            <div>
+                                <h1 class="intake-doc-title">PATIENT PRE-CONSULTATION INTAKE SUMMARY</h1>
+                                <span class="intake-doc-subtitle">AI Healthcare Information Assistant &bull; Clinical Educational Report</span>
+                            </div>
+                        </div>
+                        <div class="intake-meta" id="intake-doc-meta">
+                            <!-- Populated dynamically: Date, Time, Region -->
+                        </div>
+                    </div>
+
+                    <div class="intake-divider"></div>
+
+                    <!-- Report Body Sections -->
+                    <div class="intake-sections" id="intake-sections-content">
+                        <!-- Populated dynamically via script.js -->
+                    </div>
+
+                    <!-- Custom Patient Notes (Interactive) -->
+                    <div class="intake-section intake-notes-section">
+                        <h3 class="intake-section-title">📝 Additional Patient Notes & Questions</h3>
+                        <p class="intake-notes-hint">Add any specific details, personal allergies, or questions before generating your PDF:</p>
+                        <textarea id="intake-user-notes" class="intake-notes-textarea" placeholder="e.g. Known penicillin allergy; pain worsens in the evening; currently taking daily multivitamins..."></textarea>
+                    </div>
+
+                    <!-- Legal Disclaimer -->
+                    <div class="intake-disclaimer">
+                        <strong>Clinical Educational Notice:</strong> This summary is compiled from the patient's interaction with an educational AI health assistant. It is provided to assist patient-physician communication and does NOT constitute a formal medical diagnosis, clinical chart, or prescription.
+                    </div>
+                </div>
+            </div>
+
+            <!-- Export Modal Action Footer -->
+            <div class="export-modal-footer">
+                <button type="button" class="export-btn-secondary" onclick="printIntakeSummary()">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="6 9 6 2 18 2 18 9"/>
+                        <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>
+                        <rect x="6" y="14" width="12" height="8"/>
+                    </svg>
+                    <span>Print</span>
+                </button>
+                <button type="button" class="export-btn-secondary" onclick="copyIntakeSummaryText(this)">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                    </svg>
+                    <span>Copy Text</span>
+                </button>
+                <button type="button" id="download-pdf-btn" class="export-btn-primary" onclick="downloadPdfReport()">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                        <polyline points="7 10 12 15 17 10"/>
+                        <line x1="12" y1="15" x2="12" y2="3"/>
+                    </svg>
+                    <span>Download PDF Report</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Interactive First-Aid & Emergency Action Flashcards Modal -->
+    <div class="modal-overlay hidden" id="firstaid-modal" role="dialog" aria-modal="true" aria-labelledby="firstaid-modal-title">
+        <div class="modal-card firstaid-modal-card">
+            <!-- Modal Header -->
+            <div class="firstaid-modal-header">
+                <div class="firstaid-header-left">
+                    <div class="firstaid-icon-badge" aria-hidden="true">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M11 2a2 2 0 0 0-2 2v5H4a2 2 0 0 0-2 2v2c0 1.1.9 2 2 2h5v5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2v-5h5a2 2 0 0 0 2-2v-2a2 2 0 0 0-2-2h-5V4a2 2 0 0 0-2-2h-2z"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h2 id="firstaid-modal-title" class="firstaid-title">Interactive First-Aid & Emergency Action Flashcards</h2>
+                        <span class="firstaid-subtitle">Evidence-based clinical protocols (AHA / Red Cross / ERC) & CPR 110 BPM Metronome</span>
+                    </div>
+                </div>
+                <button type="button" class="firstaid-close-btn" onclick="closeFirstAidModal()" aria-label="Close first-aid flashcards">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"/>
+                        <line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                </button>
+            </div>
+
+            <!-- Emergency Hotline Quick Triggers Banner -->
+            <div class="firstaid-hotlines-banner">
+                <span class="hotline-banner-label">🚨 Regional Emergency Hotlines:</span>
+                <div class="hotline-quick-pills">
+                    <a href="tel:911" class="hotline-pill hotline-pill-red" title="Call 911 (USA / Canada)">📞 911 (US/CA)</a>
+                    <a href="tel:999" class="hotline-pill hotline-pill-red" title="Call 999 (UK)">📞 999 (UK)</a>
+                    <a href="tel:112" class="hotline-pill hotline-pill-red" title="Call 112 (EU / India)">📞 112 (EU/IN)</a>
+                    <a href="tel:18002221222" class="hotline-pill hotline-pill-amber" title="Call Poison Control Help">🧪 Poison Control</a>
+                </div>
+            </div>
+
+            <!-- Modal Body -->
+            <div class="firstaid-modal-body">
+                <!-- Search & Category Filters Bar -->
+                <div class="firstaid-nav-bar">
+                    <div class="firstaid-search-wrap">
+                        <span class="firstaid-search-icon">🔍</span>
+                        <input type="text" id="firstaid-search-input" class="firstaid-search-input" placeholder="Search first aid, CPR, choking, burns, seizures, wounds..." oninput="onFirstAidSearch(this.value)">
+                        <button type="button" class="firstaid-search-clear" id="firstaid-search-clear" onclick="clearFirstAidSearch()" style="display: none;" aria-label="Clear search">✕</button>
+                    </div>
+                    <div class="firstaid-cat-tabs" role="tablist" aria-label="First-aid categories">
+                        <button type="button" class="firstaid-tab-pill active" data-cat="all" onclick="filterFirstAidCategory('all', this)">All Protocols (14)</button>
+                        <button type="button" class="firstaid-tab-pill" data-cat="life_threatening" onclick="filterFirstAidCategory('life_threatening', this)">🚨 Life-Threatening</button>
+                        <button type="button" class="firstaid-tab-pill" data-cat="trauma" onclick="filterFirstAidCategory('trauma', this)">🩸 Trauma & Bleeding</button>
+                        <button type="button" class="firstaid-tab-pill" data-cat="medical_crisis" onclick="filterFirstAidCategory('medical_crisis', this)">⚡ Medical Crises</button>
+                        <button type="button" class="firstaid-tab-pill" data-cat="everyday_injuries" onclick="filterFirstAidCategory('everyday_injuries', this)">🩹 Everyday First Aid</button>
+                    </div>
+                </div>
+
+                <!-- Catalog Grid View (Browsing Cards) -->
+                <div class="firstaid-grid-container" id="firstaid-grid-container">
+                    <div class="firstaid-cards-grid" id="firstaid-cards-grid">
+                        <!-- Populated dynamically via script.js -->
+                    </div>
+                </div>
+
+                <!-- Active Card Step-by-Step Interactive Viewer (Hidden by default until card selected) -->
+                <div class="firstaid-viewer-container" id="firstaid-viewer-container" style="display: none;">
+                    <!-- Card Header & Navigation Back -->
+                    <div class="firstaid-viewer-header">
+                        <button type="button" class="firstaid-back-btn" onclick="backToFirstAidGrid()">
+                            ← Back to Flashcard List
+                        </button>
+                        <div class="firstaid-viewer-tags" id="firstaid-viewer-tags">
+                            <!-- Populated dynamically -->
+                        </div>
+                    </div>
+
+                    <!-- Card Summary Box -->
+                    <div class="firstaid-card-hero" id="firstaid-card-hero">
+                        <!-- Populated dynamically -->
+                    </div>
+
+                    <!-- CPR 110 BPM Metronome Widget (Visible for CPR cards) -->
+                    <div class="cpr-metronome-card" id="cpr-metronome-card" style="display: none;">
+                        <div class="cpr-metronome-left">
+                            <div class="cpr-pulse-heart" id="cpr-pulse-heart" aria-hidden="true">💓</div>
+                            <div class="cpr-metronome-info">
+                                <strong class="cpr-bpm-title">CPR Compression Rate: 110 BPM</strong>
+                                <span class="cpr-bpm-desc">AHA Standard Target: 100–120 compressions per minute</span>
+                            </div>
+                        </div>
+                        <div class="cpr-metronome-controls">
+                            <button type="button" class="cpr-audio-btn" id="cpr-audio-btn" onclick="toggleCprMetronome()">
+                                <span id="cpr-btn-icon">▶</span> <span id="cpr-btn-text">Start 110 BPM Metronome</span>
+                            </button>
+                            <span class="cpr-compression-counter" id="cpr-compression-counter">Clicks: 0</span>
+                        </div>
+                    </div>
+
+                    <!-- Step-by-Step Carousel Viewer -->
+                    <div class="firstaid-step-viewer">
+                        <div class="firstaid-step-progress">
+                            <div class="firstaid-step-track">
+                                <div class="firstaid-step-bar" id="firstaid-step-bar" style="width: 25%;"></div>
+                            </div>
+                            <span class="firstaid-step-badge" id="firstaid-step-badge">Step 1 of 5</span>
+                        </div>
+
+                        <!-- Step Card Content -->
+                        <div class="firstaid-step-card" id="firstaid-step-card">
+                            <!-- Injected dynamically -->
+                        </div>
+
+                        <!-- Step Navigation Bar -->
+                        <div class="firstaid-step-nav">
+                            <button type="button" class="firstaid-step-btn" id="firstaid-step-prev" onclick="prevFirstAidStep()" disabled>
+                                ← Previous Step
+                            </button>
+                            <div class="firstaid-step-dots" id="firstaid-step-dots">
+                                <!-- Dot indicators -->
+                            </div>
+                            <button type="button" class="firstaid-step-btn firstaid-step-btn-primary" id="firstaid-step-next" onclick="nextFirstAidStep()">
+                                Next Step →
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Critical DO NOT Warnings Box -->
+                    <div class="firstaid-donot-card" id="firstaid-donot-card">
+                        <!-- Populated dynamically -->
+                    </div>
+
+                    <!-- Protocol Guideline Citation -->
+                    <div class="firstaid-citation-note" id="firstaid-citation-note">
+                        <!-- Populated dynamically -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Footer Actions -->
+            <div class="firstaid-modal-footer">
+                <button type="button" class="firstaid-btn-secondary" onclick="backToFirstAidGrid()" id="firstaid-view-all-btn" style="display: none;">
+                    📋 All Flashcards
+                </button>
+                <button type="button" class="firstaid-btn-secondary" id="firstaid-attach-btn" onclick="attachFirstAidToDoctorSummary()" style="display: none;">
+                    📄 Attach Protocol to Doctor PDF
+                </button>
+                <button type="button" class="firstaid-btn-primary" onclick="discussFirstAidInChat()">
+                    💬 Discuss Protocol in Chat
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Interactive Evidence-Based Clinical Risk Calculators & Vital Tools Modal -->
+    <div class="modal-overlay hidden" id="calculator-modal" role="dialog" aria-modal="true" aria-labelledby="calc-modal-title">
+        <div class="modal-card calc-modal-card">
+            <!-- Modal Header -->
+            <div class="calc-modal-header">
+                <div class="calc-header-left">
+                    <div class="calc-icon-badge" aria-hidden="true">🧮</div>
+                    <div>
+                        <h2 id="calc-modal-title" class="calc-title">Clinical Risk Calculators & Vital Tools</h2>
+                        <span class="calc-subtitle">Evidence-based algorithms for ASCVD, eGFR, CHA₂DS₂-VASc, FIB-4, Wells', CURB-65 & BMI</span>
+                    </div>
+                </div>
+                <button type="button" class="calc-close-btn" onclick="closeCalculatorModal()" aria-label="Close calculators">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"/>
+                        <line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                </button>
+            </div>
+
+            <!-- Modal Body -->
+            <div class="calc-modal-body">
+                <!-- Category Switcher Tabs -->
+                <div class="calc-category-tabs" role="tablist" aria-label="Clinical calculator categories">
+                    <button type="button" class="calc-tab-pill active" data-cat="all" onclick="filterCalculatorCategory('all', this)">All Tools (11)</button>
+                    <button type="button" class="calc-tab-pill" data-cat="cardiovascular" onclick="filterCalculatorCategory('cardiovascular', this)">🫀 Cardiovascular</button>
+                    <button type="button" class="calc-tab-pill" data-cat="renal_hepatic" onclick="filterCalculatorCategory('renal_hepatic', this)">🫘 Renal & Hepatic</button>
+                    <button type="button" class="calc-tab-pill" data-cat="pulmonary_sepsis" onclick="filterCalculatorCategory('pulmonary_sepsis', this)">🫁 Pulmonary & Sepsis</button>
+                    <button type="button" class="calc-tab-pill" data-cat="metabolic_vitals" onclick="filterCalculatorCategory('metabolic_vitals', this)">⚖️ Metabolic & Vitals</button>
+                    <button type="button" class="calc-tab-pill" data-cat="mental_health" onclick="filterCalculatorCategory('mental_health', this)">🧠 Mental Health</button>
+                </div>
+
+                <!-- Calculator Selection Bar -->
+                <div class="calc-selector-card">
+                    <div class="calc-selector-grid">
+                        <div class="calc-select-group">
+                            <label for="calc-tool-select" class="calc-label">Select Clinical Tool:</label>
+                            <select id="calc-tool-select" class="calc-select" onchange="onCalculatorSelected(this.value)">
+                                <!-- Populated dynamically via script.js -->
+                            </select>
+                        </div>
+                        <div class="calc-tool-info-tag" id="calc-tool-info-tag">
+                            <span class="calc-badge-chip" id="calc-badge-chip">AHA/ACC 2018</span>
+                            <span class="calc-info-desc" id="calc-info-desc">Calculates 10-year risk of first fatal/nonfatal heart attack or stroke.</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Dynamic Form & Inputs Container -->
+                <div class="calc-form-container" id="calc-form-container">
+                    <!-- Dynamic form inputs rendered via script.js -->
+                </div>
+
+                <!-- Real-Time Computed Risk Report Card -->
+                <div class="calc-result-card" id="calc-result-card">
+                    <!-- Dynamic report rendered via script.js -->
+                </div>
+            </div>
+
+            <!-- Footer Actions -->
+            <div class="calc-modal-footer">
+                <button type="button" class="calc-btn-secondary" onclick="resetActiveCalculator()">
+                    🔄 Reset Inputs
+                </button>
+                <button type="button" class="calc-btn-secondary" id="calc-attach-btn" onclick="attachCalculatorToDoctorSummary()">
+                    📄 Attach to Doctor PDF
+                </button>
+                <button type="button" class="calc-btn-primary" onclick="discussCalculatorInChat()">
+                    💬 Discuss with Assistant
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Interactive Clinically Validated Mental Health & Somatic Toolkits Modal -->
+    <div class="modal-overlay hidden" id="mental-health-modal" role="dialog" aria-modal="true" aria-labelledby="mh-modal-title">
+        <div class="modal-card mh-modal-card">
+            <!-- Modal Header -->
+            <div class="mh-modal-header">
+                <div class="mh-header-left">
+                    <div class="mh-icon-badge" aria-hidden="true">🧠</div>
+                    <div>
+                        <h2 id="mh-modal-title" class="mh-title">Mental Health & Somatic Regulation Suite</h2>
+                        <span class="mh-subtitle">Evidence-based psychometric scales, animated vagus lung pacers & Stanley-Brown safety planning</span>
+                    </div>
+                </div>
+                <button type="button" class="mh-close-btn" onclick="closeMentalHealthModal()" aria-label="Close mental health suite">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"/>
+                        <line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                </button>
+            </div>
+
+            <!-- Emergency Hotline Quick Triggers Banner -->
+            <div class="mh-hotlines-banner">
+                <span class="mh-hotline-label">🚨 24/7 Crisis Lifelines:</span>
+                <div class="mh-hotline-pills">
+                    <a href="tel:988" class="hotline-pill hotline-pill-red" title="Call or Text 988 (USA / Canada)">📞 988 (US/CA)</a>
+                    <a href="sms:741741?body=HOME" class="hotline-pill hotline-pill-amber" title="Text HOME to 741741">💬 Text 741741</a>
+                    <a href="tel:111" class="hotline-pill hotline-pill-red" title="Call 111 NHS (UK)">📞 111 (UK)</a>
+                    <a href="tel:112" class="hotline-pill hotline-pill-red" title="Call 112 (EU / India)">📞 112 (EU/IN)</a>
+                    <a href="tel:18664887386" class="hotline-pill hotline-pill-purple" title="Trevor Project LGBTQ+">🌈 Trevor (866-488-7386)</a>
+                </div>
+            </div>
+
+            <!-- Modal Body -->
+            <div class="mh-modal-body">
+                <!-- Specialty Category Tabs -->
+                <div class="mh-category-tabs" role="tablist" aria-label="Mental health categories">
+                    <button type="button" class="mh-tab-pill active" data-cat="somatic_pacers" onclick="switchMentalHealthCategory('somatic_pacers', this)">🫁 Somatic Lung Pacers</button>
+                    <button type="button" class="mh-tab-pill" data-cat="clinical_scales" onclick="switchMentalHealthCategory('clinical_scales', this)">🧠 Clinical Scales (6)</button>
+                    <button type="button" class="mh-tab-pill" data-cat="grounding_pmr" onclick="switchMentalHealthCategory('grounding_pmr', this)">🧘 Grounding & PMR</button>
+                    <button type="button" class="mh-tab-pill" data-cat="crisis_safety" onclick="switchMentalHealthCategory('crisis_safety', this)">🛡️ Crisis Safety Plan</button>
+                </div>
+
+                <!-- VIEW 1: Somatic Breathing & Vagus Nerve Pacers -->
+                <div class="mh-view-section" id="mh-view-somatic_pacers">
+                    <div class="mh-subnav-bar">
+                        <label for="mh-pacer-select" class="mh-label">Select Vagal Regulation Pacer:</label>
+                        <select id="mh-pacer-select" class="mh-select" onchange="onSomaticPacerSelect(this.value)">
+                            <option value="box_breathing">⏹️ Box Breathing (4-4-4-4 Square Pacer) — Autonomic Balance</option>
+                            <option value="relaxing_478">🌊 4-7-8 Parasympathetic Relaxing Breath — Panic & Insomnia</option>
+                            <option value="physiological_sigh">🫁 Physiological Sigh (Stanford) — Rapid Real-Time Reset</option>
+                        </select>
+                    </div>
+
+                    <!-- Visual Breathing Lung Pacer Display -->
+                    <div class="mh-pacer-card">
+                        <div class="mh-pacer-top-row">
+                            <span class="mh-pacer-badge" id="mh-pacer-badge">Navy SEALs / Autonomic Balance</span>
+                            <div class="mh-sound-toggle-wrap">
+                                <button type="button" class="mh-sound-btn" id="mh-sound-btn" onclick="togglePacerAudio()">
+                                    <span id="mh-sound-icon">🔊</span> <span id="mh-sound-label">Audio Chimes: ON</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Animated Lung Circle / Canvas -->
+                        <div class="mh-lung-animation-wrap">
+                            <div class="mh-breathing-ring" id="mh-breathing-ring">
+                                <div class="mh-breathing-core" id="mh-breathing-core">
+                                    <span class="mh-phase-icon" id="mh-phase-icon">🫁</span>
+                                    <span class="mh-phase-name" id="mh-phase-name">Ready</span>
+                                    <span class="mh-phase-timer" id="mh-phase-timer">0s</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mh-pacer-instruction-box">
+                            <p class="mh-phase-instruction" id="mh-phase-instruction">Click 'Start Breathing Pacer' to begin paced vagal regulation.</p>
+                            <div class="mh-pacer-metrics">
+                                <span class="mh-metric-pill" id="mh-cycle-count">Cycles: 0</span>
+                                <span class="mh-metric-pill" id="mh-elapsed-time">Time: 00:00</span>
+                            </div>
+                        </div>
+
+                        <!-- Control Buttons -->
+                        <div class="mh-pacer-controls">
+                            <button type="button" class="mh-btn-primary mh-pacer-start-btn" id="mh-pacer-toggle-btn" onclick="toggleBreathingPacer()">
+                                ▶ Start Breathing Pacer
+                            </button>
+                            <button type="button" class="mh-btn-secondary" onclick="resetBreathingPacer()">
+                                ↺ Reset
+                            </button>
+                        </div>
+
+                        <!-- Neurobiological Mechanism Box -->
+                        <div class="mh-neuro-box" id="mh-neuro-box">
+                            <strong>🧠 Vagal Neurobiology Target:</strong>
+                            <span id="mh-neuro-text">Rhythmic square pacing equalizes baroreceptor firing, increases high-frequency HRV, and balances sympathetic-parasympathetic tone.</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- VIEW 2: Clinical Assessment Scales -->
+                <div class="mh-view-section" id="mh-view-clinical_scales" style="display: none;">
+                    <div class="mh-subnav-bar">
+                        <label for="mh-scale-select" class="mh-label">Select Psychometric Scale:</label>
+                        <select id="mh-scale-select" class="mh-select" onchange="onMentalHealthScaleSelect(this.value)">
+                            <option value="phq9">🧠 PHQ-9 Depression Severity Scale (9 items)</option>
+                            <option value="gad7">🧘 GAD-7 Generalized Anxiety Scale (7 items)</option>
+                            <option value="pc_ptsd5">🛡️ PC-PTSD-5 Primary Care Trauma Screener (5 items)</option>
+                            <option value="isi">🌙 Insomnia Severity Index (ISI - 7 items)</option>
+                            <option value="pss4">⚡ Perceived Stress Scale (PSS-4 - 4 items)</option>
+                            <option value="cage_aid">🍷 CAGE-AID Substance & Alcohol Screener (4 items)</option>
+                        </select>
+                    </div>
+
+                    <!-- Dynamic Questionnaire Container -->
+                    <div class="mh-questionnaire-card" id="mh-questionnaire-card">
+                        <!-- Populated dynamically via script.js -->
+                    </div>
+
+                    <!-- Computed Assessment Result Card -->
+                    <div class="mh-scale-result-card" id="mh-scale-result-card" style="display: none;">
+                        <!-- Injected dynamically -->
+                    </div>
+                </div>
+
+                <!-- VIEW 3: Grounding & Somatic Release -->
+                <div class="mh-view-section" id="mh-view-grounding_pmr" style="display: none;">
+                    <div class="mh-subnav-bar">
+                        <label for="mh-grounding-select" class="mh-label">Select Grounding / Somatic Tool:</label>
+                        <select id="mh-grounding-select" class="mh-select" onchange="onGroundingToolSelect(this.value)">
+                            <option value="grounding_54321">👁️ 5-4-3-2-1 Somatosensory Grounding (Panic & Dissociation)</option>
+                            <option value="pmr_jacobson">💪 Progressive Muscle Relaxation (Jacobson PMR — 8 Zones)</option>
+                            <option value="bilateral_tapping">🦋 Bilateral Tapping & Butterfly Hug Pacer (EMDR Somatic)</option>
+                            <option value="autogenic_training">☀️ Autogenic Training (Schultz Warmth Protocol)</option>
+                        </select>
+                    </div>
+
+                    <!-- Interactive Grounding / PMR Body Container -->
+                    <div class="mh-grounding-container" id="mh-grounding-container">
+                        <!-- Injected dynamically via script.js -->
+                    </div>
+                </div>
+
+                <!-- VIEW 4: Stanley-Brown Crisis Safety Plan -->
+                <div class="mh-view-section" id="mh-view-crisis_safety" style="display: none;">
+                    <div class="mh-safety-plan-card">
+                        <div class="mh-safety-header-hero">
+                            <div class="mh-safety-hero-icon">🛡️</div>
+                            <div>
+                                <h3>Stanley-Brown Safety Planning Intervention</h3>
+                                <p>A personalized, evidence-based coping plan developed with clinical suicide prevention standards. Fill out your triggers, internal coping strategies, and support network below.</p>
+                            </div>
+                        </div>
+
+                        <form id="mh-safety-plan-form" class="mh-safety-form" onsubmit="event.preventDefault(); saveSafetyPlan();">
+                            <!-- Step 1: Warning Signs -->
+                            <div class="mh-plan-step-box">
+                                <div class="mh-step-badge-num">Step 1</div>
+                                <div class="mh-step-content">
+                                    <label class="mh-step-label">Personal Warning Signs (Triggers, thoughts, sensations that a crisis is developing):</label>
+                                    <textarea id="sp-warning-signs" class="mh-plan-textarea" rows="2" placeholder="e.g. Can't sleep, isolating in room, feeling hopeless, racing heartbeat..."></textarea>
+                                </div>
+                            </div>
+
+                            <!-- Step 2: Internal Coping Strategies -->
+                            <div class="mh-plan-step-box">
+                                <div class="mh-step-badge-num">Step 2</div>
+                                <div class="mh-step-content">
+                                    <label class="mh-step-label">Internal Coping Strategies (Things I can do by myself without contacting others):</label>
+                                    <textarea id="sp-coping-strategies" class="mh-plan-textarea" rows="2" placeholder="e.g. 5-minute Box Breathing, 5-4-3-2-1 Grounding, listening to acoustic playlist, cold water splash..."></textarea>
+                                </div>
+                            </div>
+
+                            <!-- Step 3: People & Social Distractions -->
+                            <div class="mh-plan-step-box">
+                                <div class="mh-step-badge-num">Step 3</div>
+                                <div class="mh-step-content">
+                                    <label class="mh-step-label">People and Social Settings that Provide Distraction:</label>
+                                    <textarea id="sp-social-distractions" class="mh-plan-textarea" rows="2" placeholder="e.g. Going to the library/coffee shop, walking in the park, calling Sam to talk about movies..."></textarea>
+                                </div>
+                            </div>
+
+                            <!-- Step 4: Trusted Friends & Family -->
+                            <div class="mh-plan-step-box">
+                                <div class="mh-step-badge-num">Step 4</div>
+                                <div class="mh-step-content">
+                                    <label class="mh-step-label">Trusted Friends or Family Members I Can Ask for Help in a Crisis:</label>
+                                    <textarea id="sp-trusted-contacts" class="mh-plan-textarea" rows="2" placeholder="e.g. Sarah (Mom) - 555-0192, Michael (Best Friend) - 555-0144..."></textarea>
+                                </div>
+                            </div>
+
+                            <!-- Step 5: Professionals & Crisis Agencies -->
+                            <div class="mh-plan-step-box">
+                                <div class="mh-step-badge-num">Step 5</div>
+                                <div class="mh-step-content">
+                                    <label class="mh-step-label">Healthcare Professionals & Emergency Contacts:</label>
+                                    <textarea id="sp-professionals" class="mh-plan-textarea" rows="2" placeholder="e.g. Dr. Davis (Therapist) - 555-0188; Clinic Emergency After-Hours..."></textarea>
+                                    <div class="mh-default-hotline-note">
+                                        🚨 <strong>24/7 Lifelines:</strong> 988 Suicide & Crisis Lifeline | Crisis Text Line (Text HOME to 741741) | Emergency 911/112
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Step 6: Environment Safety -->
+                            <div class="mh-plan-step-box">
+                                <div class="mh-step-badge-num">Step 6</div>
+                                <div class="mh-step-content">
+                                    <label class="mh-step-label">Making the Environment Safe (Securing medications, items, safe spaces):</label>
+                                    <textarea id="sp-environment-safety" class="mh-plan-textarea" rows="2" placeholder="e.g. Give extra medications to family member, store locks on cabinets, stay in a shared living room..."></textarea>
+                                </div>
+                            </div>
+
+                            <div class="mh-plan-actions-row">
+                                <button type="button" class="mh-btn-primary" onclick="saveSafetyPlan()">
+                                    💾 Save My Safety Plan
+                                </button>
+                                <button type="button" class="mh-btn-secondary" onclick="loadSampleSafetyPlan()">
+                                    📋 Load Helpful Sample Plan
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Footer Actions -->
+            <div class="mh-modal-footer">
+                <button type="button" class="mh-btn-secondary" onclick="resetActiveMentalHealthTool()">
+                    🔄 Reset Active Tool
+                </button>
+                <button type="button" class="mh-btn-secondary" id="mh-attach-btn" onclick="attachMentalHealthToDoctorSummary()">
+                    📄 Attach to Doctor PDF
+                </button>
+                <button type="button" class="mh-btn-primary" onclick="discussMentalHealthInChat()">
+                    💬 Discuss with Assistant
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ======================================================================= -->
+    <!-- MULTIMODAL MEDICAL DOCUMENT & VISION OCR MODAL                         -->
+    <!-- ======================================================================= -->
+    <div class="modal-overlay hidden" id="vision-modal" role="dialog" aria-modal="true" aria-labelledby="vision-modal-title">
+        <div class="modal-card hub-modal-card vision-modal-card">
+            <!-- Modal Header -->
+            <div class="hub-modal-header">
+                <div class="hub-header-left">
+                    <div class="hub-icon-badge vision-icon-bg" aria-hidden="true">📸</div>
+                    <div>
+                        <h2 id="vision-modal-title" class="hub-title">Multimodal Medical Document & Vision OCR</h2>
+                        <span class="hub-subtitle">Extract and demystify X-Rays, MRI/CT Scans, Lab slips, and Prescriptions with 3-Tier ELI5 clarity</span>
+                    </div>
+                </div>
+                <button type="button" class="hub-close-btn" onclick="closeVisionModal()" aria-label="Close vision OCR modal">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"/>
+                        <line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                </button>
+            </div>
+
+            <!-- Mode Switcher Tabs -->
+            <div class="hub-nav-tabs" role="tablist" aria-label="Vision OCR Target Modes">
+                <button type="button" class="hub-nav-pill active" id="vision-tab-auto" onclick="switchVisionMode('auto')">
+                    🔍 Auto-Detect Document
+                </button>
+                <button type="button" class="hub-nav-pill" id="vision-tab-radiology" onclick="switchVisionMode('radiology')">
+                    🩻 X-Ray, MRI & CT Scans
+                </button>
+                <button type="button" class="hub-nav-pill" id="vision-tab-lab_report" onclick="switchVisionMode('lab_report')">
+                    🔬 Laboratory Test Slip
+                </button>
+                <button type="button" class="hub-nav-pill" id="vision-tab-prescription" onclick="switchVisionMode('prescription')">
+                    💊 Prescription & Med Box
+                </button>
+                <button type="button" class="hub-nav-pill" id="vision-tab-vitals" onclick="switchVisionMode('vitals')">
+                    💓 Vital Signs Monitor
+                </button>
+            </div>
+
+            <!-- Modal Body -->
+            <div class="hub-modal-body vision-modal-body">
+                <!-- Dropzone & Upload Section -->
+                <div class="vision-upload-section" id="vision-upload-section">
+                    <input type="file" id="vision-file-input" accept="image/jpeg,image/png,image/webp" capture="environment" style="display: none;" onchange="handleVisionFileSelect(event)">
+                    
+                    <div class="vision-dropzone" id="vision-dropzone" onclick="triggerVisionFileInput()" ondragover="handleVisionDragOver(event)" ondragleave="handleVisionDragLeave(event)" ondrop="handleVisionDrop(event)">
+                        <div class="vision-dropzone-icon">
+                            <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                <polyline points="17 8 12 3 7 8"/>
+                                <line x1="12" y1="3" x2="12" y2="15"/>
+                            </svg>
+                        </div>
+                        <h3 class="vision-dropzone-title">Upload or Drag Medical Image Here</h3>
+                        <p class="vision-dropzone-subtitle">Supports JPEG, PNG, WEBP lab slips, Rx bottles, and vitals monitors (Up to 5MB)</p>
+                        <div class="vision-dropzone-btns">
+                            <button type="button" class="vision-btn-primary" onclick="triggerVisionFileInput(); event.stopPropagation();">
+                                📁 Browse Image
+                            </button>
+                            <button type="button" class="vision-btn-camera" onclick="triggerVisionCamera(); event.stopPropagation();">
+                                📷 Open Camera
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Active Image Preview & Scanning Status Overlay -->
+                <div class="vision-processing-section" id="vision-processing-section" style="display: none;">
+                    <div class="vision-preview-card">
+                        <div class="vision-preview-image-wrap">
+                            <img id="vision-preview-img" src="" alt="Medical Document Preview" class="vision-preview-img">
+                            <div class="vision-scan-overlay" id="vision-scan-overlay">
+                                <div class="vision-scan-beam"></div>
+                            </div>
+                        </div>
+                        <div class="vision-preview-meta">
+                            <div class="vision-meta-header">
+                                <span class="vision-file-name" id="vision-file-name">document.png</span>
+                                <span class="vision-file-size" id="vision-file-size">1.2 MB</span>
+                            </div>
+                            <div class="vision-status-progress" id="vision-status-progress">
+                                <div class="vision-spinner"></div>
+                                <div class="vision-status-text-wrap">
+                                    <span class="vision-status-main" id="vision-status-main">Analyzing Document with Gemini Multimodal Vision...</span>
+                                    <span class="vision-status-sub" id="vision-status-sub">Extracting biomarkers, drug names, and reference ranges</span>
+                                </div>
+                            </div>
+                            <button type="button" class="vision-change-btn" onclick="resetVisionUpload()">
+                                ✕ Change Image
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Structured 3-Tier ELI5 OCR Results Section -->
+                <div class="vision-results-section" id="vision-results-section" style="display: none;">
+                    <!-- Rendered dynamically by script.js -->
+                </div>
+            </div>
+
+            <!-- Footer Actions -->
+            <div class="hub-modal-footer vision-modal-footer">
+                <button type="button" class="poly-btn-secondary" onclick="resetVisionUpload()" id="vision-new-scan-btn">
+                    📷 New Scan
+                </button>
+                <div class="vision-action-buttons" id="vision-action-buttons" style="display: none;">
+                    <!-- Populated dynamically: Auto-populate Lab Gauges / Polypharmacy / Attach PDF -->
+                </div>
+                <button type="button" class="poly-btn-primary" onclick="closeVisionModal()">
+                    Done
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Responsive App Wrapper (Full-Screen Edge-to-Edge Desktop & Mobile) -->
+    <div class="app-layout" id="app-layout">
+        <!-- Sidebar Backdrop for Mobile / Small Screens -->
+        <div class="sidebar-backdrop" id="sidebar-backdrop" onclick="toggleSidebar(false)"></div>
+
+        <!-- Left Desktop Clinical Tools Sidebar -->
+        <aside class="desktop-sidebar" id="desktop-sidebar" aria-label="Clinical Tools Sidebar">
+            <!-- Sidebar Header & Branding -->
+            <div class="sidebar-header">
+                <div class="sidebar-brand">
+                    <div class="sidebar-logo" aria-hidden="true">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M12 2v20M2 12h20"/>
+                        </svg>
+                    </div>
+                    <div class="sidebar-brand-text">
+                        <h2 class="sidebar-title">AI Health Assistant</h2>
+                        <span class="sidebar-badge">Clinical Intelligence v2.0</span>
+                    </div>
+                </div>
+                <div class="sidebar-status-tag">
+                    <span class="sidebar-dot"></span>
+                    <span>100% Grounded RAG Active</span>
+                </div>
+            </div>
+
+            <!-- Sidebar Scrollable Content -->
+            <div class="sidebar-scroll">
+                <!-- Section 1: 4 Unified Health Hubs (Consolidated & Streamlined) -->
+                <div class="sidebar-section">
+                    <div class="sidebar-section-title">
+                        <span>Health Hubs</span>
+                        <span class="sidebar-section-pill">4 Unified</span>
+                    </div>
+                    <div class="sidebar-tools-grid">
+                        <!-- Hub 1: Symptom & Triage Hub -->
+                        <button type="button" class="sidebar-tool-card hub-card-accent" onclick="openSymptomTriageHub('bodymap')" aria-label="Open Symptom & Triage Hub">
+                            <div class="tool-card-icon bodymap-icon-bg">🩺</div>
+                            <div class="tool-card-body">
+                                <div class="tool-card-header">
+                                    <strong>Symptom & Triage Hub</strong>
+                                    <span class="tool-badge-pill tool-badge-hub">Unified Hub</span>
+                                </div>
+                                <p>2D Body Map locator + 5-step guided clinical triage</p>
+                            </div>
+                        </button>
+
+                        <!-- Hub 2: Medications, Labs & Diet Hub -->
+                        <button type="button" class="sidebar-tool-card hub-card-accent" onclick="openMedsLabsDietHub('polypharmacy')" aria-label="Open Medications, Labs & Diet Hub">
+                            <div class="tool-card-icon poly-icon-bg">💊</div>
+                            <div class="tool-card-body">
+                                <div class="tool-card-header">
+                                    <strong>Medications, Labs & Diet</strong>
+                                    <span class="tool-badge-pill tool-badge-hub">3-in-1 Hub</span>
+                                </div>
+                                <p>Drug safety matrix, 25+ lab tests & nutrition therapy</p>
+                            </div>
+                        </button>
+
+                        <!-- Hub 3: Clinical Risk & Vitals Suite -->
+                        <button type="button" class="sidebar-tool-card hub-card-accent" onclick="openClinicalRiskHub('all')" aria-label="Open Clinical Risk & Vitals Suite">
+                            <div class="tool-card-icon calc-icon-bg">🧮</div>
+                            <div class="tool-card-body">
+                                <div class="tool-card-header">
+                                    <strong>Clinical Risk & Vitals</strong>
+                                    <span class="tool-badge-pill tool-badge-hub">Risk Engine</span>
+                                </div>
+                                <p>ASCVD, eGFR, CHA₂DS₂-VASc, FIB-4, Wells', CURB & BMI</p>
+                            </div>
+                        </button>
+
+                        <!-- Hub 4: Calm & Mental Wellbeing Hub -->
+                        <button type="button" class="sidebar-tool-card hub-card-accent" onclick="openCalmMentalHealthHub('somatic_pacers')" aria-label="Open Calm & Mental Wellbeing Hub">
+                            <div class="tool-card-icon mh-icon-bg">🧠</div>
+                            <div class="tool-card-body">
+                                <div class="tool-card-header">
+                                    <strong>Calm & Mental Wellbeing</strong>
+                                    <span class="tool-badge-pill tool-badge-somatic">Vagus Hub</span>
+                                </div>
+                                <p>Somatic lung pacers, PHQ-9/GAD-7 scales & safety plan</p>
+                            </div>
+                        </button>
+
+                        <!-- Quick Access 0: Multimodal Vision OCR Scanner -->
+                        <button type="button" class="sidebar-tool-card sidebar-quick-card" onclick="openVisionModal('auto')" aria-label="Scan Prescription or Lab Slip">
+                            <div class="tool-card-icon vision-icon-bg">📸</div>
+                            <div class="tool-card-body">
+                                <div class="tool-card-header">
+                                    <strong>Rx & Lab Slip OCR</strong>
+                                    <span class="tool-badge-pill tool-badge-vision">Vision AI</span>
+                                </div>
+                                <p>Multimodal scan for prescriptions, lab slips & vitals</p>
+                            </div>
+                        </button>
+
+                        <!-- Quick Access 1: First-Aid Flashcards & CPR -->
+                        <button type="button" class="sidebar-tool-card sidebar-quick-card" onclick="openFirstAidModal()" aria-label="Open Interactive First-Aid & Emergency Flashcards">
+                            <div class="tool-card-icon firstaid-icon-bg">🚑</div>
+                            <div class="tool-card-body">
+                                <div class="tool-card-header">
+                                    <strong>First-Aid Flashcards</strong>
+                                    <span class="tool-badge-pill tool-badge-emergency">Emergency</span>
+                                </div>
+                                <p>14 emergency protocols & 110 BPM CPR metronome</p>
+                            </div>
+                        </button>
+
+                        <!-- Quick Access 2: Doctor Intake Summary PDF -->
+                        <button type="button" class="sidebar-tool-card sidebar-quick-card" onclick="openExportModal()" aria-label="Export Clinical Intake Summary as PDF">
+                            <div class="tool-card-icon export-icon-bg">📄</div>
+                            <div class="tool-card-body">
+                                <div class="tool-card-header">
+                                    <strong>Doctor Intake Summary</strong>
+                                    <span class="tool-badge-pill">PDF Export</span>
+                                </div>
+                                <p>Pre-consultation report with active health profile</p>
+                            </div>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Section 2: Vetted Specialty Explorer -->
+                <div class="sidebar-section">
+                    <div class="sidebar-section-title">
+                        <span>Clinical Specialties</span>
+                        <span class="sidebar-section-pill">123+ Conditions</span>
+                    </div>
+                    <div class="specialty-chips-grid">
+                        <button type="button" class="specialty-chip" onclick="sendSuggested('What are common respiratory conditions and breathing symptom red flags?')">
+                            🫁 Respiratory
+                        </button>
+                        <button type="button" class="specialty-chip" onclick="sendSuggested('What are symptoms and care for Migraine and neurological headaches?')">
+                            🧠 Neurology
+                        </button>
+                        <button type="button" class="specialty-chip" onclick="sendSuggested('What are causes of acid reflux, GERD, and stomach cramps?')">
+                            🥣 Digestive
+                        </button>
+                        <button type="button" class="specialty-chip" onclick="sendSuggested('What are common skin rashes, eczema, and allergy symptoms?')">
+                            🧴 Dermatology
+                        </button>
+                        <button type="button" class="specialty-chip" onclick="sendSuggested('How to manage lower back pain, knee joint stiffness, and sciatica?')">
+                            🦴 Orthopedics
+                        </button>
+                        <button type="button" class="specialty-chip" onclick="sendSuggested('What are key warning signs of hypertension and heart palpitations?')">
+                            ❤️ Cardiology
+                        </button>
+                        <button type="button" class="specialty-chip" onclick="sendSuggested('What are clinical guidelines for managing fever, chills, and fatigue?')">
+                            🌡️ Infection & Fever
+                        </button>
+                        <button type="button" class="specialty-chip" onclick="sendSuggested('What are daily habits for healthy sleep hygiene, hydration, and nutrition?')">
+                            🌿 Wellness Care
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Section 3: Live Regional Emergency Hotline Widget -->
+                <div class="sidebar-section">
+                    <div class="sidebar-section-title">
+                        <span>Emergency Assistance</span>
+                        <span class="sidebar-emergency-indicator" id="sidebar-region-label">US</span>
+                    </div>
+                    <div class="sidebar-emergency-card">
+                        <div class="emergency-row">
+                            <div class="emergency-label">
+                                <span class="emergency-icon">🚨</span>
+                                <div>
+                                    <strong>Primary Emergency</strong>
+                                    <span class="emergency-sub">Police, Fire & Ambulance</span>
+                                </div>
+                            </div>
+                            <span class="emergency-number" id="sidebar-primary-num">911</span>
+                        </div>
+                        <div class="emergency-row">
+                            <div class="emergency-label">
+                                <span class="emergency-icon">📞</span>
+                                <div>
+                                    <strong>Crisis / Mental Health</strong>
+                                    <span class="emergency-sub">24/7 Confidential Support</span>
+                                </div>
+                            </div>
+                            <span class="emergency-number" id="sidebar-crisis-num">988</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Section 4: Safety & Verification Guarantee -->
+                <div class="sidebar-verification-card">
+                    <div class="verification-badge">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                            <polyline points="9 12 11 14 15 10"/>
+                        </svg>
+                        <strong>Clinical Safety Guard</strong>
+                    </div>
+                    <p>Powered by Two-Stage Post-Generation Verification & RAG Clinical Grounding to prevent medical inaccuracies.</p>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Right Main Chat & Clinical Workspace -->
+        <div class="chat-container">
+            <!-- Header -->
+            <header class="chat-header">
+                <div class="header-main">
+                    <div class="header-left">
+                        <!-- Sidebar Toggle Button (Collapse on Desktop / Open Drawer on Mobile) -->
+                        <button type="button" class="sidebar-toggle-btn" id="sidebar-toggle-btn" onclick="toggleSidebar()" aria-label="Toggle clinical sidebar" title="Toggle Clinical Tools Sidebar">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                                <line x1="9" y1="3" x2="9" y2="21"/>
+                            </svg>
+                        </button>
+                        <div class="header-icon" aria-hidden="true">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M12 2v20M2 12h20"/>
+                            </svg>
+                        </div>
+                        <div class="header-info">
+                            <h1>AI Health Assistant</h1>
+                            <span class="status-indicator"><span class="dot"></span> Online &bull; Educational Guide</span>
+                        </div>
+                    </div>
+
+                    <!-- Header Controls (Symptom Hub + Meds & Labs + Export PDF + Region + Reset) -->
+                    <div class="header-controls">
+                        <button type="button" class="bodymap-header-btn" onclick="openSymptomTriageHub('bodymap')" title="Symptom & Triage Hub" aria-label="Open Symptom & Triage Hub">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="12" cy="5" r="3"/>
+                                <line x1="12" y1="8" x2="12" y2="15"/>
+                                <line x1="9" y1="11" x2="15" y2="11"/>
+                                <line x1="12" y1="15" x2="9" y2="21"/>
+                                <line x1="12" y1="15" x2="15" y2="21"/>
+                            </svg>
+                            <span>Symptom Hub</span>
+                        </button>
+                        <button type="button" class="export-header-btn" onclick="openExportModal()" title="Export Clinical Intake Summary as PDF" aria-label="Export Clinical Intake Summary as PDF">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                                <polyline points="14 2 14 8 20 8"/>
+                                <line x1="16" y1="13" x2="8" y2="13"/>
+                                <line x1="16" y1="17" x2="8" y2="17"/>
+                            </svg>
+                            <span>Export PDF</span>
+                        </button>
+                        <div class="header-region">
+                            <label for="region-select" class="visually-hidden">Region</label>
+                            <select id="region-select" onchange="changeRegion(this.value)" aria-label="Select region for local emergency hotlines">
+                                <option value="US">🇺🇸 US (911/988)</option>
+                                <option value="UK">🇬🇧 UK (999/111)</option>
+                                <option value="IN">🇮🇳 India (112/108)</option>
+                                <option value="CA">🇨🇦 CA (911/988)</option>
+                                <option value="GLOBAL">🌐 Global</option>
+                            </select>
+                        </div>
+                        <button type="button" class="icon-btn" onclick="resetChat()" title="Start New Conversation" aria-label="Start new conversation">
+                            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+                                <path d="M3 3v5h5"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="disclaimer-banner">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <circle cx="12" cy="12" r="10"/>
+                        <line x1="12" y1="8" x2="12" y2="12"/>
+                        <line x1="12" y1="16" x2="12.01" y2="16"/>
+                    </svg>
+                    <span>Educational information only — not a substitute for professional medical advice.</span>
+                </div>
+            </header>
+
+            <!-- Message History Area (Expansive Desktop Width with Optimal Reading Column) -->
+            <main class="chat-history" id="chat-history" role="log" aria-live="polite">
+                <div class="chat-history-inner">
+                    <!-- Welcome Bot Card -->
+                    <div class="message-wrapper bot-wrapper">
+                        <div class="avatar bot-avatar" aria-hidden="true">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M12 2v20M2 12h20"/>
+                            </svg>
+                        </div>
+                        <div class="message-bubble bot-bubble">
+                            <p>Hello! I am your <strong>AI Healthcare Information Assistant</strong>. Ask me about common health symptoms, medications, lab ranges, nutrition plans, or clinical risk calculations.</p>
+                            
+                            <div class="welcome-triage-card">
+                                <div class="welcome-triage-icon">🏥</div>
+                                <div class="welcome-triage-info">
+                                    <strong>Explore our 4 Unified Health Hubs:</strong>
+                                    <span>Symptom Triage, Meds & Diet, Clinical Risk Calculators, and Calm Wellbeing.</span>
+                                </div>
+                                <div class="welcome-actions-row">
+                                    <button type="button" class="welcome-bodymap-action" onclick="openSymptomTriageHub('bodymap')">
+                                        🩺 Symptom Hub
+                                    </button>
+                                    <button type="button" class="welcome-triage-action" onclick="openMedsLabsDietHub('polypharmacy')">
+                                        💊 Meds & Diet
+                                    </button>
+                                    <button type="button" class="welcome-bodymap-action" onclick="openClinicalRiskHub('all')">
+                                        🧮 Risk & Vitals
+                                    </button>
+                                    <button type="button" class="welcome-triage-action" onclick="openCalmMentalHealthHub('somatic_pacers')">
+                                        🧠 Calm Hub
+                                    </button>
+                                </div>
+                            </div>
+
+                            <p class="bubble-subtext">Or explore common health topics:</p>
+                            
+                            <div class="quick-prompts" id="quick-prompts">
+                                <div class="chips-scroll-container">
+                                    <button class="prompt-chip" type="button" onclick="sendSuggested('What are symptoms of Common Cold?')">Common Cold</button>
+                                    <button class="prompt-chip" type="button" onclick="sendSuggested('How to manage Migraine headaches?')">Migraine Tips</button>
+                                    <button class="prompt-chip" type="button" onclick="sendSuggested('What foods are high in iron?')">Iron-rich Foods</button>
+                                    <button class="prompt-chip" type="button" onclick="sendSuggested('What are precautions for Diabetes?')">Diabetes Care</button>
+                                    <button class="prompt-chip" type="button" onclick="sendSuggested('What is healthy sleep hygiene?')">Sleep Tips</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </main>
+
+            <!-- Input Footer -->
+            <footer class="chat-footer">
+                <div class="chat-footer-inner">
+                    <form id="chat-form" class="input-form" onsubmit="handleSend(event)">
+                        <input 
+                            type="text" 
+                            id="user-input" 
+                            placeholder="Ask a health question, 'start triage', or 'export report'..." 
+                            autocomplete="off" 
+                            required
+                            aria-label="Ask a health question"
+                        />
+                        <button type="button" id="vision-scan-btn" class="vision-camera-btn" onclick="openVisionModal('auto')" title="Scan Prescription or Lab Slip (OCR)" aria-label="Scan Prescription or Lab Slip">
+                            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                                <circle cx="12" cy="13" r="4"/>
+                            </svg>
+                        </button>
+                        <button type="submit" id="send-button" aria-label="Send message">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <line x1="22" y1="2" x2="11" y2="13"/>
+                                <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+                            </svg>
+                        </button>
+                    </form>
+                    <div class="footer-note" id="footer-emergency-note">In severe emergencies, call 911 / 112 or visit an emergency room immediately.</div>
+                </div>
+            </footer>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}?v=3.0"></script>
+</body>
+</html>
